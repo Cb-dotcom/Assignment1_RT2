@@ -2,6 +2,7 @@ goal_bridge:
   ros__parameters:
     action_name: execute_target_pose
     request_topic: /target_pose_requests
+    status_topic: /motion_ui_status
     input_goal_frame: map
     execution_frame: odom
     server_wait_timeout_sec: 2.0

@@ -13,6 +13,7 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "action/ExecuteTargetPose.action"
+  "msg/MotionUiStatus.msg"
   DEPENDENCIES
     builtin_interfaces
     geometry_msgs

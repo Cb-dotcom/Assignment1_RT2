@@ -26,19 +26,33 @@ GoalBridgeComponent::GoalBridgeComponent(const rclcpp::NodeOptions & options)
     rclcpp::SystemDefaultsQoS(),
     std::bind(&GoalBridgeComponent::target_pose_callback, this, std::placeholders::_1));
 
+  status_publisher_ =
+    this->create_publisher<bme_gazebo_sensors_interfaces::msg::MotionUiStatus>(
+      status_topic_,
+      10);
+
   RCLCPP_INFO(
     get_logger(),
-    "Goal bridge ready. Subscribing to '%s', expecting user goals in '%s', transforming to '%s', and forwarding to action '%s'.",
+    "Goal bridge ready. Subscribing to '%s', publishing status on '%s', expecting user goals in '%s', transforming to '%s', and forwarding to action '%s'.",
     request_topic_.c_str(),
+    status_topic_.c_str(),
     input_goal_frame_.c_str(),
     execution_frame_.c_str(),
     action_name_.c_str());
+
+  publish_status(
+    "idle",
+    "Goal bridge ready.",
+    make_default_pose(execution_frame_),
+    0.0,
+    false);
 }
 
 void GoalBridgeComponent::declare_and_get_parameters()
 {
   action_name_ = this->declare_parameter<std::string>("action_name", "execute_target_pose");
   request_topic_ = this->declare_parameter<std::string>("request_topic", "/target_pose_requests");
+  status_topic_ = this->declare_parameter<std::string>("status_topic", "/motion_ui_status");
   input_goal_frame_ = this->declare_parameter<std::string>("input_goal_frame", "map");
   execution_frame_ = this->declare_parameter<std::string>("execution_frame", "odom");
   server_wait_timeout_sec_ = this->declare_parameter<double>("server_wait_timeout_sec", 2.0);
@@ -49,6 +63,9 @@ void GoalBridgeComponent::declare_and_get_parameters()
   }
   if (request_topic_.empty()) {
     throw std::invalid_argument("request_topic cannot be empty.");
+  }
+  if (status_topic_.empty()) {
+    throw std::invalid_argument("status_topic cannot be empty.");
   }
   if (input_goal_frame_.empty()) {
     throw std::invalid_argument("input_goal_frame cannot be empty.");
@@ -70,15 +87,27 @@ void GoalBridgeComponent::target_pose_callback(
   std::string reason;
   if (!validate_request(*msg, reason)) {
     RCLCPP_WARN(get_logger(), "Ignoring target pose request: %s", reason.c_str());
+    publish_status(
+      "request_invalid",
+      reason,
+      make_default_pose(execution_frame_),
+      0.0,
+      false);
     return;
   }
 
   {
     std::scoped_lock<std::mutex> lock(goal_mutex_);
     if (goal_active_) {
-      RCLCPP_WARN(
-        get_logger(),
-        "Ignoring target pose request because a goal is already active.");
+      const std::string busy_message =
+        "Ignoring target pose request because a goal is already active.";
+      RCLCPP_WARN(get_logger(), "%s", busy_message.c_str());
+      publish_status(
+        "busy",
+        busy_message,
+        make_default_pose(execution_frame_),
+        0.0,
+        true);
       return;
     }
   }
@@ -86,15 +115,25 @@ void GoalBridgeComponent::target_pose_callback(
   geometry_msgs::msg::PoseStamped transformed_goal;
   if (!transform_request_to_execution_frame(*msg, transformed_goal, reason)) {
     RCLCPP_WARN(get_logger(), "Failed to transform target pose request: %s", reason.c_str());
+    publish_status(
+      "transform_failed",
+      reason,
+      make_default_pose(execution_frame_),
+      0.0,
+      false);
     return;
   }
 
   if (!action_client_->wait_for_action_server(std::chrono::duration<double>(server_wait_timeout_sec_))) {
-    RCLCPP_WARN(
-      get_logger(),
-      "Action server '%s' is not available within %.3f seconds.",
-      action_name_.c_str(),
-      server_wait_timeout_sec_);
+    const std::string server_message =
+      "Action server '" + action_name_ + "' is not available within the configured timeout.";
+    RCLCPP_WARN(get_logger(), "%s", server_message.c_str());
+    publish_status(
+      "server_unavailable",
+      server_message,
+      make_default_pose(execution_frame_),
+      0.0,
+      false);
     return;
   }
 
@@ -104,6 +143,9 @@ void GoalBridgeComponent::target_pose_callback(
   {
     std::scoped_lock<std::mutex> lock(goal_mutex_);
     goal_active_ = true;
+    have_cached_goals_ = true;
+    last_requested_goal_ = *msg;
+    last_execution_goal_ = transformed_goal;
   }
 
   RCLCPP_INFO(
@@ -118,6 +160,13 @@ void GoalBridgeComponent::target_pose_callback(
     transformed_goal.pose.position.y,
     transformed_goal.pose.position.z);
 
+  publish_status(
+    "goal_submitted",
+    "Goal submitted to action server.",
+    make_default_pose(execution_frame_),
+    0.0,
+    true);
+
   rclcpp_action::Client<ExecuteTargetPose>::SendGoalOptions options;
 
   options.goal_response_callback =
@@ -128,9 +177,24 @@ void GoalBridgeComponent::target_pose_callback(
           std::scoped_lock<std::mutex> lock(goal_mutex_);
           goal_active_ = false;
         }
+
+        publish_status(
+          "rejected",
+          "Action server rejected the submitted goal.",
+          make_default_pose(execution_frame_),
+          0.0,
+          false);
+
         RCLCPP_WARN(get_logger(), "Action server rejected the submitted goal.");
         return;
       }
+
+      publish_status(
+        "accepted",
+        "Action server accepted the submitted goal.",
+        make_default_pose(execution_frame_),
+        0.0,
+        true);
 
       RCLCPP_INFO(get_logger(), "Action server accepted the submitted goal.");
     };
@@ -141,6 +205,14 @@ void GoalBridgeComponent::target_pose_callback(
       const std::shared_ptr<const ExecuteTargetPose::Feedback> feedback)
     {
       const auto & pose = feedback->current_pose.pose.position;
+
+      publish_status(
+        "executing",
+        "Goal is being executed.",
+        feedback->current_pose,
+        feedback->remaining_distance,
+        true);
+
       RCLCPP_INFO(
         get_logger(),
         "Feedback: current pose [%.3f, %.3f, %.3f], remaining distance %.3f.",
@@ -162,6 +234,12 @@ void GoalBridgeComponent::target_pose_callback(
 
       switch (result.code) {
         case rclcpp_action::ResultCode::SUCCEEDED:
+          publish_status(
+            "succeeded",
+            result.result->message,
+            result.result->final_pose,
+            0.0,
+            false);
           RCLCPP_INFO(
             get_logger(),
             "Goal succeeded. Final pose [%.3f, %.3f, %.3f]. Message: %s",
@@ -172,6 +250,12 @@ void GoalBridgeComponent::target_pose_callback(
           break;
 
         case rclcpp_action::ResultCode::ABORTED:
+          publish_status(
+            "failed",
+            result.result->message,
+            result.result->final_pose,
+            0.0,
+            false);
           RCLCPP_WARN(
             get_logger(),
             "Goal aborted. Final pose [%.3f, %.3f, %.3f]. Message: %s",
@@ -182,6 +266,12 @@ void GoalBridgeComponent::target_pose_callback(
           break;
 
         case rclcpp_action::ResultCode::CANCELED:
+          publish_status(
+            "canceled",
+            result.result->message,
+            result.result->final_pose,
+            0.0,
+            false);
           RCLCPP_WARN(
             get_logger(),
             "Goal canceled. Final pose [%.3f, %.3f, %.3f]. Message: %s",
@@ -192,6 +282,12 @@ void GoalBridgeComponent::target_pose_callback(
           break;
 
         default:
+          publish_status(
+            "unknown",
+            result.result->message,
+            result.result->final_pose,
+            0.0,
+            false);
           RCLCPP_WARN(
             get_logger(),
             "Goal finished with unknown result code. Final pose [%.3f, %.3f, %.3f]. Message: %s",
@@ -261,6 +357,45 @@ bool GoalBridgeComponent::transform_request_to_execution_frame(
       "' to frame '" + execution_frame_ + "': " + ex.what();
     return false;
   }
+}
+
+void GoalBridgeComponent::publish_status(
+  const std::string & state,
+  const std::string & message,
+  const geometry_msgs::msg::PoseStamped & current_pose,
+  double remaining_distance,
+  bool goal_active) const
+{
+  bme_gazebo_sensors_interfaces::msg::MotionUiStatus status;
+  status.stamp = this->now();
+  status.state = state;
+  status.message = message;
+  status.goal_active = goal_active;
+  status.remaining_distance = remaining_distance;
+  status.current_pose = current_pose;
+
+  {
+    std::scoped_lock<std::mutex> lock(goal_mutex_);
+    if (have_cached_goals_) {
+      status.requested_goal_pose = last_requested_goal_;
+      status.execution_goal_pose = last_execution_goal_;
+    } else {
+      status.requested_goal_pose = make_default_pose(input_goal_frame_);
+      status.execution_goal_pose = make_default_pose(execution_frame_);
+    }
+  }
+
+  status_publisher_->publish(status);
+}
+
+geometry_msgs::msg::PoseStamped GoalBridgeComponent::make_default_pose(
+  const std::string & frame_id) const
+{
+  geometry_msgs::msg::PoseStamped pose;
+  pose.header.stamp = this->now();
+  pose.header.frame_id = frame_id;
+  pose.pose.orientation.w = 1.0;
+  return pose;
 }
 
 bool GoalBridgeComponent::is_finite(double value)
