@@ -1,5 +1,0 @@
-pose_input_node:
-  ros__parameters:
-    request_topic: /target_pose_requests
-    frame_id: map
-    yaw_unit: rad
