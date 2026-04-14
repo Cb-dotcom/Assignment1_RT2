@@ -6,28 +6,18 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
 endif()
 
 find_package(ament_cmake REQUIRED)
+find_package(bme_gazebo_sensors_interfaces REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_components REQUIRED)
-
-find_package(geometry_msgs REQUIRED)
-find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(builtin_interfaces REQUIRED)
-find_package(action_msgs REQUIRED)
-
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 
-find_package(rosidl_default_generators REQUIRED)
-
-rosidl_generate_interfaces(${PROJECT_NAME}
-  "action/ExecuteTargetPose.action"
-  DEPENDENCIES geometry_msgs
-)
-
-rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+find_package(rosidl_default_runtime REQUIRED)
 
 add_library(motion_executor_component SHARED
   src/motion_executor_component.cpp
@@ -44,17 +34,14 @@ target_compile_definitions(motion_executor_component
 )
 
 ament_target_dependencies(motion_executor_component
+  bme_gazebo_sensors_interfaces
+  geometry_msgs
+  nav_msgs
   rclcpp
   rclcpp_action
   rclcpp_components
-  geometry_msgs
-  nav_msgs
   tf2
   tf2_geometry_msgs
-)
-
-target_link_libraries(motion_executor_component
-  ${cpp_typesupport_target}
 )
 
 rclcpp_components_register_nodes(motion_executor_component
@@ -76,17 +63,14 @@ target_compile_definitions(goal_bridge_component
 )
 
 ament_target_dependencies(goal_bridge_component
+  bme_gazebo_sensors_interfaces
+  geometry_msgs
   rclcpp
   rclcpp_action
   rclcpp_components
-  geometry_msgs
   tf2
   tf2_geometry_msgs
   tf2_ros
-)
-
-target_link_libraries(goal_bridge_component
-  ${cpp_typesupport_target}
 )
 
 rclcpp_components_register_nodes(goal_bridge_component
@@ -98,8 +82,8 @@ add_executable(pose_input_node
 )
 
 ament_target_dependencies(pose_input_node
-  rclcpp
   geometry_msgs
+  rclcpp
   tf2
   tf2_geometry_msgs
 )
@@ -121,16 +105,17 @@ install(
 
 install(
   DIRECTORY
-    launch
     worlds
     rviz
     urdf
     meshes
-    config
   DESTINATION share/${PROJECT_NAME}
 )
 
 ament_export_include_directories(include)
-ament_export_dependencies(rosidl_default_runtime)
+ament_export_dependencies(
+  bme_gazebo_sensors_interfaces
+  rosidl_default_runtime
+)
 
 ament_package()

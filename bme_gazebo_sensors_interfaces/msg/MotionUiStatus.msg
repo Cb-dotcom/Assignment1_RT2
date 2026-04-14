@@ -1,0 +1,8 @@
+builtin_interfaces/Time stamp
+string state
+string message
+bool goal_active
+float64 remaining_distance
+geometry_msgs/PoseStamped current_pose
+geometry_msgs/PoseStamped requested_goal_pose
+geometry_msgs/PoseStamped execution_goal_pose

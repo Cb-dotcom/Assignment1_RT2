@@ -7,11 +7,12 @@ from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, Comm
 from launch_ros.actions import Node
 from ament_index_python.packages import get_package_share_directory
 
+
 def generate_launch_description():
+    pkg_bringup = get_package_share_directory('bme_gazebo_sensors_bringup')
+    pkg_runtime = get_package_share_directory('bme_gazebo_sensors')
 
-    pkg_bme_gazebo_sensors = get_package_share_directory('bme_gazebo_sensors')
-
-    gazebo_models_path, ignore_last_dir = os.path.split(pkg_bme_gazebo_sensors)
+    gazebo_models_path, _ = os.path.split(pkg_runtime)
     os.environ["GZ_SIM_RESOURCE_PATH"] = os.pathsep + gazebo_models_path
 
     rviz_launch_arg = DeclareLaunchArgument(
@@ -54,41 +55,44 @@ def generate_launch_description():
         description='Flag to enable use_sim_time'
     )
 
-    # Define the path to your URDF or Xacro file
     urdf_file_path = PathJoinSubstitution([
-        pkg_bme_gazebo_sensors,  # Replace with your package name
+        pkg_runtime,
         "urdf",
-        LaunchConfiguration('model')  # Replace with your URDF or Xacro file
+        LaunchConfiguration('model')
     ])
 
     world_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(pkg_bme_gazebo_sensors, 'launch', 'world.launch.py'),
+            os.path.join(pkg_bringup, 'launch', 'world.launch.py'),
         ),
         launch_arguments={
-        'world': LaunchConfiguration('world'),
+            'world': LaunchConfiguration('world'),
         }.items()
     )
 
-    # Launch rviz
     rviz_node = Node(
         package='rviz2',
         executable='rviz2',
-        arguments=['-d', PathJoinSubstitution([pkg_bme_gazebo_sensors, 'rviz', LaunchConfiguration('rviz_config')])],
+        arguments=[
+            '-d',
+            PathJoinSubstitution([pkg_runtime, 'rviz', LaunchConfiguration('rviz_config')])
+        ],
         condition=IfCondition(LaunchConfiguration('rviz')),
         parameters=[
             {'use_sim_time': LaunchConfiguration('use_sim_time')},
         ]
     )
 
-    # Spawn the URDF model using the `/world/<world_name>/create` service
     spawn_urdf_node = Node(
         package="ros_gz_sim",
         executable="create",
         arguments=[
             "-name", "mogi_bot",
             "-topic", "robot_description",
-            "-x", LaunchConfiguration('x'), "-y", LaunchConfiguration('y'), "-z", "0.5", "-Y", LaunchConfiguration('yaw')  # Initial spawn position
+            "-x", LaunchConfiguration('x'),
+            "-y", LaunchConfiguration('y'),
+            "-z", "0.5",
+            "-Y", LaunchConfiguration('yaw')
         ],
         output="screen",
         parameters=[
@@ -96,7 +100,6 @@ def generate_launch_description():
         ]
     )
 
-    # Node to bridge /cmd_vel and /odom
     gz_bridge_node = Node(
         package="ros_gz_bridge",
         executable="parameter_bridge",
@@ -119,8 +122,10 @@ def generate_launch_description():
         name='robot_state_publisher',
         output='screen',
         parameters=[
-            {'robot_description': Command(['xacro', ' ', urdf_file_path]),
-             'use_sim_time': LaunchConfiguration('use_sim_time')},
+            {
+                'robot_description': Command(['xacro', ' ', urdf_file_path]),
+                'use_sim_time': LaunchConfiguration('use_sim_time')
+            },
         ],
         remappings=[
             ('/tf', 'tf'),
@@ -128,21 +133,19 @@ def generate_launch_description():
         ]
     )
 
+    launch_description = LaunchDescription()
+    launch_description.add_action(rviz_launch_arg)
+    launch_description.add_action(rviz_config_arg)
+    launch_description.add_action(world_arg)
+    launch_description.add_action(model_arg)
+    launch_description.add_action(x_arg)
+    launch_description.add_action(y_arg)
+    launch_description.add_action(yaw_arg)
+    launch_description.add_action(sim_time_arg)
+    launch_description.add_action(world_launch)
+    launch_description.add_action(rviz_node)
+    launch_description.add_action(spawn_urdf_node)
+    launch_description.add_action(gz_bridge_node)
+    launch_description.add_action(robot_state_publisher_node)
 
-    launchDescriptionObject = LaunchDescription()
-
-    launchDescriptionObject.add_action(rviz_launch_arg)
-    launchDescriptionObject.add_action(rviz_config_arg)
-    launchDescriptionObject.add_action(world_arg)
-    launchDescriptionObject.add_action(model_arg)
-    launchDescriptionObject.add_action(x_arg)
-    launchDescriptionObject.add_action(y_arg)
-    launchDescriptionObject.add_action(yaw_arg)
-    launchDescriptionObject.add_action(sim_time_arg)
-    launchDescriptionObject.add_action(world_launch)
-    launchDescriptionObject.add_action(rviz_node)
-    launchDescriptionObject.add_action(spawn_urdf_node)
-    launchDescriptionObject.add_action(gz_bridge_node)
-    launchDescriptionObject.add_action(robot_state_publisher_node)
-
-    return launchDescriptionObject
+    return launch_description

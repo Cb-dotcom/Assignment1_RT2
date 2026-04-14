@@ -5,9 +5,8 @@
 #include <mutex>
 #include <string>
 
-#include "bme_gazebo_sensors/action/execute_target_pose.hpp"
+#include "bme_gazebo_sensors_interfaces/action/execute_target_pose.hpp"
 #include "bme_gazebo_sensors/visibility_control.h"
-
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
@@ -21,7 +20,7 @@ namespace bme_gazebo_sensors
 class BME_GAZEBO_SENSORS_PUBLIC MotionExecutorComponent : public rclcpp::Node
 {
 public:
-  using ExecuteTargetPose = bme_gazebo_sensors::action::ExecuteTargetPose;
+  using ExecuteTargetPose = bme_gazebo_sensors_interfaces::action::ExecuteTargetPose;
   using GoalHandleExecuteTargetPose = rclcpp_action::ServerGoalHandle<ExecuteTargetPose>;
 
   explicit MotionExecutorComponent(const rclcpp::NodeOptions & options);

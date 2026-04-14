@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>bme_gazebo_sensors_bringup</name>
+  <version>0.0.0</version>
+  <description>Bringup package for bme_gazebo_sensors launch files and configuration.</description>
+  <maintainer email="charbel.elbeaini@lau.edu">Cb-dotcom</maintainer>
+  <license>Apache-2.0</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <depend>ament_index_python</depend>
+  <depend>bme_gazebo_sensors</depend>
+  <depend>rclcpp_components</depend>
+  <depend>robot_state_publisher</depend>
+  <depend>ros_gz_bridge</depend>
+  <depend>ros_gz_sim</depend>
+  <depend>rviz2</depend>
+  <depend>tf2_ros</depend>
+  <depend>xacro</depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

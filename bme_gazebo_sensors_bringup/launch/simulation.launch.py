@@ -3,14 +3,12 @@ import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import ComposableNodeContainer, Node
-from launch_ros.descriptions import ComposableNode
+from launch.substitutions import LaunchConfiguration
 from ament_index_python.packages import get_package_share_directory
 
 
 def generate_launch_description():
-    pkg_bme_gazebo_sensors = get_package_share_directory('bme_gazebo_sensors')
+    pkg_bringup = get_package_share_directory('bme_gazebo_sensors_bringup')
 
     rviz_arg = DeclareLaunchArgument(
         'rviz',
@@ -60,9 +58,9 @@ def generate_launch_description():
         description='Flag to enable use_sim_time'
     )
 
-    simulation_launch = IncludeLaunchDescription(
+    spawn_robot_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(pkg_bme_gazebo_sensors, 'launch', 'simulation.launch.py')
+            os.path.join(pkg_bringup, 'launch', 'spawn_robot.launch.py')
         ),
         launch_arguments={
             'rviz': LaunchConfiguration('rviz'),
@@ -76,57 +74,6 @@ def generate_launch_description():
         }.items()
     )
 
-    motion_executor_config = PathJoinSubstitution([
-        pkg_bme_gazebo_sensors,
-        'config',
-        'motion_executor.yaml'
-    ])
-
-    goal_bridge_config = PathJoinSubstitution([
-        pkg_bme_gazebo_sensors,
-        'config',
-        'goal_bridge.yaml'
-    ])
-
-    component_container = ComposableNodeContainer(
-        name='motion_container',
-        namespace='',
-        package='rclcpp_components',
-        executable='component_container',
-        composable_node_descriptions=[
-            ComposableNode(
-                package='bme_gazebo_sensors',
-                plugin='bme_gazebo_sensors::MotionExecutorComponent',
-                name='motion_executor',
-                parameters=[
-                    motion_executor_config,
-                    {'use_sim_time': LaunchConfiguration('use_sim_time')}
-                ],
-            ),
-            ComposableNode(
-                package='bme_gazebo_sensors',
-                plugin='bme_gazebo_sensors::GoalBridgeComponent',
-                name='goal_bridge',
-                parameters=[
-                    goal_bridge_config,
-                    {'use_sim_time': LaunchConfiguration('use_sim_time')}
-                ],
-            ),
-        ],
-        output='screen'
-    )
-
-    map_to_odom_tf = Node(
-    package="tf2_ros",
-    executable="static_transform_publisher",
-    arguments=[
-        "0", "0", "0",   # x y z
-        "0", "0", "0",   # roll pitch yaw
-        "map", "odom"
-    ],
-    output="screen"
-    )
-
     return LaunchDescription([
         rviz_arg,
         rviz_config_arg,
@@ -136,7 +83,5 @@ def generate_launch_description():
         y_arg,
         yaw_arg,
         sim_time_arg,
-        simulation_launch,
-        component_container,
-        map_to_odom_tf,
+        spawn_robot_launch,
     ])
