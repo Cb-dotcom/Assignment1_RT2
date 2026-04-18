@@ -26,7 +26,8 @@ type GoalDraft = {
 
 const DEFAULT_ROSBRIDGE_URL =
   import.meta.env.VITE_ROSBRIDGE_URL ?? "ws://localhost:9090";
-const DEFAULT_GAZEBO_WEB_URL = import.meta.env.VITE_GAZEBO_WEB_URL ?? "";
+const DEFAULT_GAZEBO_WEB_URL =
+  import.meta.env.VITE_GAZEBO_WEB_URL ?? "";
 
 const QUICK_GOALS: Array<{
   label: string;
@@ -91,6 +92,8 @@ function App() {
   const [gazeboUrlInput, setGazeboUrlInput] = useState(DEFAULT_GAZEBO_WEB_URL);
   const [activeGazeboUrl, setActiveGazeboUrl] = useState(DEFAULT_GAZEBO_WEB_URL);
 
+  const [rosReconnectCounter, setRosReconnectCounter] = useState(0);
+
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [connectionMessage, setConnectionMessage] = useState("Not connected.");
 
@@ -145,7 +148,7 @@ function App() {
       client.dispose();
       clientRef.current = null;
     };
-  }, [activeRosbridgeUrl]);
+  }, [activeRosbridgeUrl, rosReconnectCounter]);
 
   const handleApplyConnections = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -160,6 +163,7 @@ function App() {
 
     setActiveRosbridgeUrl(nextRosbridgeUrl);
     setActiveGazeboUrl(nextGazeboUrl);
+    setRosReconnectCounter((previous) => previous + 1);
 
     appendEvent(
       `Applied connection settings. rosbridge=${nextRosbridgeUrl}${
@@ -357,7 +361,7 @@ function App() {
                 <input
                   value={gazeboUrlInput}
                   onChange={(event) => setGazeboUrlInput(event.target.value)}
-                  placeholder="http://localhost:8080"
+                  placeholder="http://localhost:3001/visualization"
                 />
               </label>
 

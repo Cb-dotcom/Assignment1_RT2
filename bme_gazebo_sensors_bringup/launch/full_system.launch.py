@@ -1,9 +1,9 @@
 import os
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, ExecuteProcess
 from launch.conditions import IfCondition
-from launch.launch_description_sources import PythonLaunchDescriptionSource, AnyLaunchDescriptionSource
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
@@ -12,7 +12,6 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
     pkg_bringup = get_package_share_directory('bme_gazebo_sensors_bringup')
-    pkg_rosbridge = get_package_share_directory('rosbridge_server')
 
     rviz_arg = DeclareLaunchArgument(
         'rviz',
@@ -68,6 +67,12 @@ def generate_launch_description():
         description='Launch rosbridge websocket server'
     )
 
+    start_gazebo_web_arg = DeclareLaunchArgument(
+        'start_gazebo_web',
+        default_value='true',
+        description='Launch Gazebo websocket server for web visualization'
+    )
+
     simulation_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_bringup, 'launch', 'simulation.launch.py')
@@ -84,12 +89,11 @@ def generate_launch_description():
         }.items()
     )
 
-    rosbridge_launch = IncludeLaunchDescription(
-        AnyLaunchDescriptionSource(
-            os.path.join(pkg_rosbridge, 'launch', 'rosbridge_websocket_launch.xml')
-        ),
-        condition=IfCondition(LaunchConfiguration('start_rosbridge'))
-    )
+    gazebo_websocket_config = PathJoinSubstitution([
+        pkg_bringup,
+        'config',
+        'gazebo_websocket.ign'
+    ])
 
     motion_executor_config = PathJoinSubstitution([
         pkg_bringup,
@@ -103,10 +107,36 @@ def generate_launch_description():
         'goal_bridge.yaml'
     ])
 
+    rosbridge_websocket_node = Node(
+        package='rosbridge_server',
+        executable='rosbridge_websocket',
+        name='rosbridge_websocket',
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('start_rosbridge')),
+        parameters=[
+            {'port': 9090},
+            {'address': '0.0.0.0'},
+        ]
+    )
+
+    rosapi_node = Node(
+        package='rosapi',
+        executable='rosapi_node',
+        name='rosapi',
+        output='screen',
+        condition=IfCondition(LaunchConfiguration('start_rosbridge')),
+    )
+
     map_to_odom_tf = Node(
         package='tf2_ros',
         executable='static_transform_publisher',
         arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom'],
+        output='screen'
+    )
+
+    gazebo_websocket = ExecuteProcess(
+        cmd=['ign', 'launch', gazebo_websocket_config],
+        condition=IfCondition(LaunchConfiguration('start_gazebo_web')),
         output='screen'
     )
 
@@ -148,8 +178,11 @@ def generate_launch_description():
         yaw_arg,
         sim_time_arg,
         start_rosbridge_arg,
+        start_gazebo_web_arg,
         simulation_launch,
-        rosbridge_launch,
+        rosbridge_websocket_node,
+        rosapi_node,
         map_to_odom_tf,
         component_container,
+        gazebo_websocket,
     ])
