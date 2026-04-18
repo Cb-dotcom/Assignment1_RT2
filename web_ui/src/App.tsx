@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { PanelCard } from "./components/PanelCard";
+import { SimulationPane } from "./components/SimulationPane";
 import { StatusBadge, statusToneFromState } from "./components/StatusBadge";
 import { RosDashboardClient } from "./lib/ros";
 import type { MotionUiStatus, PoseStamped } from "./types/ros";
@@ -23,7 +24,9 @@ type GoalDraft = {
   yaw: string;
 };
 
-const DEFAULT_URL = import.meta.env.VITE_ROSBRIDGE_URL ?? "ws://localhost:9090";
+const DEFAULT_ROSBRIDGE_URL =
+  import.meta.env.VITE_ROSBRIDGE_URL ?? "ws://localhost:9090";
+const DEFAULT_GAZEBO_WEB_URL = import.meta.env.VITE_GAZEBO_WEB_URL ?? "";
 
 const QUICK_GOALS: Array<{
   label: string;
@@ -82,8 +85,11 @@ function App() {
   const clientRef = useRef<RosDashboardClient | null>(null);
   const lastStatusEventKeyRef = useRef<string>("");
 
-  const [urlInput, setUrlInput] = useState(DEFAULT_URL);
-  const [activeUrl, setActiveUrl] = useState(DEFAULT_URL);
+  const [rosbridgeUrlInput, setRosbridgeUrlInput] = useState(DEFAULT_ROSBRIDGE_URL);
+  const [activeRosbridgeUrl, setActiveRosbridgeUrl] = useState(DEFAULT_ROSBRIDGE_URL);
+
+  const [gazeboUrlInput, setGazeboUrlInput] = useState(DEFAULT_GAZEBO_WEB_URL);
+  const [activeGazeboUrl, setActiveGazeboUrl] = useState(DEFAULT_GAZEBO_WEB_URL);
 
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [connectionMessage, setConnectionMessage] = useState("Not connected.");
@@ -105,7 +111,7 @@ function App() {
   };
 
   useEffect(() => {
-    const client = new RosDashboardClient(activeUrl, {
+    const client = new RosDashboardClient(activeRosbridgeUrl, {
       onConnectionStateChange: (state, message) => {
         setConnectionState(state);
         setConnectionMessage(message);
@@ -139,16 +145,27 @@ function App() {
       client.dispose();
       clientRef.current = null;
     };
-  }, [activeUrl]);
+  }, [activeRosbridgeUrl]);
 
-  const handleReconnect = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleApplyConnections = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    const trimmed = urlInput.trim();
-    if (trimmed.length === 0) {
-      appendEvent("Reconnect ignored: WebSocket URL cannot be empty.");
+
+    const nextRosbridgeUrl = rosbridgeUrlInput.trim();
+    const nextGazeboUrl = gazeboUrlInput.trim();
+
+    if (nextRosbridgeUrl.length === 0) {
+      appendEvent("Connection update ignored: rosbridge URL cannot be empty.");
       return;
     }
-    setActiveUrl(trimmed);
+
+    setActiveRosbridgeUrl(nextRosbridgeUrl);
+    setActiveGazeboUrl(nextGazeboUrl);
+
+    appendEvent(
+      `Applied connection settings. rosbridge=${nextRosbridgeUrl}${
+        nextGazeboUrl ? `, gazebo=${nextGazeboUrl}` : ", gazebo not configured"
+      }`,
+    );
   };
 
   const submitGoal = (
@@ -255,24 +272,16 @@ function App() {
         <section className="left-column">
           <PanelCard
             title="Simulation View"
-            subtitle="Reserved layout region for embedded Gazebo visualization"
-            accent={<span className="card-tag">next integration step</span>}
+            subtitle="Embedded browser surface for Gazebo web visualization"
+            accent={<span className="card-tag">embedded</span>}
             className="simulation-card"
           >
-            <div className="simulation-placeholder">
-              <div className="simulation-overlay">
-                <StatusBadge
-                  label={status?.state ?? "idle"}
-                  tone={statusToneFromState(status?.state ?? "idle")}
-                />
-                <p>{operatorStateText}</p>
-                <div className="simulation-meta">
-                  <span>Execution frame: odom</span>
-                  <span>User frame: map</span>
-                  <span>Status stamp: {formatStatusStamp(status)}</span>
-                </div>
-              </div>
-            </div>
+            <SimulationPane
+              gazeboUrl={activeGazeboUrl}
+              stateLabel={status?.state ?? "idle"}
+              operatorStateText={operatorStateText}
+              statusStampText={formatStatusStamp(status)}
+            />
           </PanelCard>
 
           <PanelCard
@@ -330,21 +339,30 @@ function App() {
 
         <section className="right-column">
           <PanelCard
-            title="ROS Bridge"
-            subtitle="Browser-to-ROS transport session"
+            title="Connections"
+            subtitle="Browser endpoints for ROS and simulation surfaces"
           >
-            <form onSubmit={handleReconnect} className="stack">
+            <form onSubmit={handleApplyConnections} className="stack">
               <label className="field">
-                <span>WebSocket URL</span>
+                <span>ROS Bridge WebSocket URL</span>
                 <input
-                  value={urlInput}
-                  onChange={(event) => setUrlInput(event.target.value)}
+                  value={rosbridgeUrlInput}
+                  onChange={(event) => setRosbridgeUrlInput(event.target.value)}
                   placeholder="ws://localhost:9090"
                 />
               </label>
 
+              <label className="field">
+                <span>Gazebo Web URL</span>
+                <input
+                  value={gazeboUrlInput}
+                  onChange={(event) => setGazeboUrlInput(event.target.value)}
+                  placeholder="http://localhost:8080"
+                />
+              </label>
+
               <button type="submit" className="secondary-button">
-                Reconnect
+                Apply Connections
               </button>
             </form>
           </PanelCard>
