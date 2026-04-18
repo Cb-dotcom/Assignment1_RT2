@@ -2,7 +2,8 @@ import os
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource, AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import ComposableNodeContainer, Node
 from launch_ros.descriptions import ComposableNode
@@ -11,6 +12,7 @@ from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
     pkg_bringup = get_package_share_directory('bme_gazebo_sensors_bringup')
+    pkg_rosbridge = get_package_share_directory('rosbridge_server')
 
     rviz_arg = DeclareLaunchArgument(
         'rviz',
@@ -60,6 +62,12 @@ def generate_launch_description():
         description='Flag to enable use_sim_time'
     )
 
+    start_rosbridge_arg = DeclareLaunchArgument(
+        'start_rosbridge',
+        default_value='true',
+        description='Launch rosbridge websocket server'
+    )
+
     simulation_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_bringup, 'launch', 'simulation.launch.py')
@@ -74,6 +82,13 @@ def generate_launch_description():
             'yaw': LaunchConfiguration('yaw'),
             'use_sim_time': LaunchConfiguration('use_sim_time'),
         }.items()
+    )
+
+    rosbridge_launch = IncludeLaunchDescription(
+        AnyLaunchDescriptionSource(
+            os.path.join(pkg_rosbridge, 'launch', 'rosbridge_websocket_launch.xml')
+        ),
+        condition=IfCondition(LaunchConfiguration('start_rosbridge'))
     )
 
     motion_executor_config = PathJoinSubstitution([
@@ -132,7 +147,9 @@ def generate_launch_description():
         y_arg,
         yaw_arg,
         sim_time_arg,
+        start_rosbridge_arg,
         simulation_launch,
+        rosbridge_launch,
         map_to_odom_tf,
         component_container,
     ])
