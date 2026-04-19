@@ -1,7 +1,7 @@
 import os
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, ExecuteProcess
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -15,7 +15,7 @@ def generate_launch_description():
 
     rviz_arg = DeclareLaunchArgument(
         'rviz',
-        default_value='true',
+        default_value='false',
         description='Open RViz'
     )
 
@@ -57,7 +57,7 @@ def generate_launch_description():
 
     sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
-        default_value='True',
+        default_value='true',
         description='Flag to enable use_sim_time'
     )
 
@@ -65,12 +65,6 @@ def generate_launch_description():
         'start_rosbridge',
         default_value='true',
         description='Launch rosbridge websocket server'
-    )
-
-    start_gazebo_web_arg = DeclareLaunchArgument(
-        'start_gazebo_web',
-        default_value='true',
-        description='Launch Gazebo websocket server for web visualization'
     )
 
     simulation_launch = IncludeLaunchDescription(
@@ -88,12 +82,6 @@ def generate_launch_description():
             'use_sim_time': LaunchConfiguration('use_sim_time'),
         }.items()
     )
-
-    gazebo_websocket_config = PathJoinSubstitution([
-        pkg_bringup,
-        'config',
-        'gazebo_websocket.ign'
-    ])
 
     motion_executor_config = PathJoinSubstitution([
         pkg_bringup,
@@ -131,12 +119,6 @@ def generate_launch_description():
         package='tf2_ros',
         executable='static_transform_publisher',
         arguments=['0', '0', '0', '0', '0', '0', 'map', 'odom'],
-        output='screen'
-    )
-
-    gazebo_websocket = ExecuteProcess(
-        cmd=['ign', 'launch', gazebo_websocket_config],
-        condition=IfCondition(LaunchConfiguration('start_gazebo_web')),
         output='screen'
     )
 
@@ -178,11 +160,9 @@ def generate_launch_description():
         yaw_arg,
         sim_time_arg,
         start_rosbridge_arg,
-        start_gazebo_web_arg,
         simulation_launch,
         rosbridge_websocket_node,
         rosapi_node,
         map_to_odom_tf,
         component_container,
-        gazebo_websocket,
     ])

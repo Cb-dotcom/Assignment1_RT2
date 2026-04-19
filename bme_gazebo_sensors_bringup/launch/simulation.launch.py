@@ -1,77 +1,125 @@
 import os
 
-from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
 from ament_index_python.packages import get_package_share_directory
+
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, SetEnvironmentVariable, TimerAction
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+
+from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    pkg_sensors = get_package_share_directory('bme_gazebo_sensors')
     pkg_bringup = get_package_share_directory('bme_gazebo_sensors_bringup')
 
     rviz_arg = DeclareLaunchArgument(
         'rviz',
-        default_value='true',
+        default_value='false',
         description='Open RViz'
     )
 
     rviz_config_arg = DeclareLaunchArgument(
         'rviz_config',
         default_value='rviz.rviz',
-        description='RViz config file'
+        description='RViz config file name inside the bringup rviz directory'
     )
 
     world_arg = DeclareLaunchArgument(
         'world',
         default_value='my.sdf',
-        description='Name of the Gazebo world file to load'
+        description='World file name inside bme_gazebo_sensors/worlds'
     )
 
     model_arg = DeclareLaunchArgument(
         'model',
         default_value='mogi_bot.urdf',
-        description='Name of the URDF description to load'
+        description='URDF file name inside bme_gazebo_sensors/urdf'
     )
 
     x_arg = DeclareLaunchArgument(
         'x',
         default_value='2.5',
-        description='x coordinate of spawned robot'
+        description='Spawn x'
     )
 
     y_arg = DeclareLaunchArgument(
         'y',
         default_value='1.5',
-        description='y coordinate of spawned robot'
+        description='Spawn y'
     )
 
     yaw_arg = DeclareLaunchArgument(
         'yaw',
         default_value='-1.5707',
-        description='yaw angle of spawned robot'
+        description='Spawn yaw'
     )
 
     sim_time_arg = DeclareLaunchArgument(
         'use_sim_time',
-        default_value='True',
-        description='Flag to enable use_sim_time'
+        default_value='true',
+        description='Use simulation time'
     )
 
-    spawn_robot_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(pkg_bringup, 'launch', 'spawn_robot.launch.py')
-        ),
-        launch_arguments={
-            'rviz': LaunchConfiguration('rviz'),
-            'rviz_config': LaunchConfiguration('rviz_config'),
-            'world': LaunchConfiguration('world'),
-            'model': LaunchConfiguration('model'),
-            'x': LaunchConfiguration('x'),
-            'y': LaunchConfiguration('y'),
-            'yaw': LaunchConfiguration('yaw'),
-            'use_sim_time': LaunchConfiguration('use_sim_time'),
-        }.items()
+    world_path = PathJoinSubstitution([pkg_sensors, 'worlds', LaunchConfiguration('world')])
+    model_path = PathJoinSubstitution([pkg_sensors, 'urdf', LaunchConfiguration('model')])
+
+    gz_resource_paths = os.pathsep.join([
+        os.path.join(pkg_sensors, 'worlds'),
+        os.path.join(pkg_sensors, 'meshes'),
+        os.path.join(pkg_sensors, 'urdf'),
+        os.path.join(pkg_sensors, '..'),
+    ])
+
+    gz_sim_server = ExecuteProcess(
+        cmd=['gz', 'sim', '-v', '4', '-s', '-r', world_path],
+        output='screen'
+    )
+
+    gz_websocket = ExecuteProcess(
+        cmd=[
+            'gz', 'launch', '-v', '4',
+            os.path.join(pkg_bringup, 'config', 'gazebo_websocket.gzlaunch')
+        ],
+        output='screen'
+    )
+
+    robot_state_publisher_node = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        name='robot_state_publisher',
+        output='screen',
+        parameters=[
+            {
+                'use_sim_time': LaunchConfiguration('use_sim_time'),
+                'robot_description': open(
+                    os.path.join(pkg_sensors, 'urdf', 'mogi_bot.urdf'),
+                    'r',
+                    encoding='utf-8'
+                ).read()
+            }
+        ]
+    )
+
+    spawn_robot = TimerAction(
+        period=3.0,
+        actions=[
+            Node(
+                package='ros_gz_sim',
+                executable='create',
+                name='spawn_mogi_bot',
+                output='screen',
+                arguments=[
+                    '-world', 'empty',
+                    '-file', model_path,
+                    '-name', 'mogi_bot',
+                    '-x', LaunchConfiguration('x'),
+                    '-y', LaunchConfiguration('y'),
+                    '-z', '0.1',
+                    '-Y', LaunchConfiguration('yaw'),
+                ],
+            )
+        ]
     )
 
     return LaunchDescription([
@@ -83,5 +131,11 @@ def generate_launch_description():
         y_arg,
         yaw_arg,
         sim_time_arg,
-        spawn_robot_launch,
+
+        SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', gz_resource_paths),
+
+        gz_sim_server,
+        gz_websocket,
+        robot_state_publisher_node,
+        spawn_robot,
     ])
