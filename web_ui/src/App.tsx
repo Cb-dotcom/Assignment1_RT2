@@ -94,6 +94,7 @@ function App() {
 
   const [connectionState, setConnectionState] = useState<ConnectionState>("disconnected");
   const [connectionMessage, setConnectionMessage] = useState("Not connected.");
+  const [simulationFocused, setSimulationFocused] = useState(false);
 
   const [status, setStatus] = useState<MotionUiStatus | null>(null);
   const [events, setEvents] = useState<string[]>(["UI initialized."]);
@@ -266,7 +267,7 @@ function App() {
         </div>
       </header>
 
-      <main className="dashboard-grid">
+      <main className={`dashboard-grid ${simulationFocused ? "dashboard-grid-focused" : ""}`}>
         <section className="left-column">
           <PanelCard
             title="Simulation View"
@@ -274,12 +275,14 @@ function App() {
             accent={<span className="card-tag">embedded</span>}
             className="simulation-card"
           >
-            <SimulationPane
-              gazeboUrl={DEFAULT_GAZEBO_WEB_URL}
-              stateLabel={status?.state ?? "idle"}
-              operatorStateText={operatorStateText}
-              statusStampText={formatStatusStamp(status)}
-            />
+          <SimulationPane
+            gazeboUrl={DEFAULT_GAZEBO_WEB_URL}
+            stateLabel={status?.state ?? "idle"}
+            operatorStateText={operatorStateText}
+            statusStampText={formatStatusStamp(status)}
+            focused={simulationFocused}
+            onToggleFocus={() => setSimulationFocused((previous) => !previous)}
+          />
           </PanelCard>
 
           <PanelCard
