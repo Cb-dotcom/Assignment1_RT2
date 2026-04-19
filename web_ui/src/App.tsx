@@ -171,9 +171,14 @@ function App() {
     values: { x: number; y: number; yaw: number },
     source: "manual" | "preset",
     label: string,
-  ) => {
+    ) => {
     const goal = buildPoseStamped(values.x, values.y, values.yaw);
-    clientRef.current?.publishGoal(goal);
+    const published = clientRef.current?.publishGoal(goal) ?? false;
+
+    if (!published) {
+      appendEvent(`Failed to publish ${label} goal: rosbridge is not ready.`);
+      return;
+    }
 
     setGoalHistory((previous) => [
       {
@@ -195,16 +200,16 @@ function App() {
     );
   };
 
-  const handleManualSubmit = (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleManualGoalClick = () => {
+  appendEvent("Manual send button clicked.");
 
-    const parsed = parseGoalDraft(goalDraft);
+  const parsed = parseGoalDraft(goalDraft);
     if (!parsed) {
       appendEvent("Manual goal rejected locally: x, y, and yaw must be valid numbers.");
       return;
     }
 
-    submitGoal(parsed, "manual", "manual");
+    submitGoal(parsed, "manual", "manual"); 
   };
 
   const handlePresetClick = (preset: (typeof QUICK_GOALS)[number]) => {
@@ -272,7 +277,6 @@ function App() {
           <PanelCard
             title="Simulation View"
             subtitle="Embedded browser surface for Gazebo web visualization"
-            accent={<span className="card-tag">embedded</span>}
             className="simulation-card"
           >
           <SimulationPane
@@ -392,7 +396,10 @@ function App() {
               ))}
             </div>
 
-            <form onSubmit={handleManualSubmit} className="stack manual-goal-form">
+            <form
+              onSubmit={(event) => event.preventDefault()}
+              className="stack manual-goal-form"
+            >
               <label className="field">
                 <span>X</span>
                 <input
@@ -423,7 +430,12 @@ function App() {
                 />
               </label>
 
-              <button type="submit" className="primary-button" disabled={!canSendGoal}>
+              <button
+                type="button"
+                className="primary-button"
+                disabled={!canSendGoal}
+                onClick={handleManualGoalClick}
+              >
                 {status?.goal_active ? "Goal in progress" : "Send Goal"}
               </button>
             </form>

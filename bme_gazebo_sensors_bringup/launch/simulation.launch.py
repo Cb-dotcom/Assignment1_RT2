@@ -1,68 +1,40 @@
 import os
+import xacro
 
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, SetEnvironmentVariable, TimerAction
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.actions import (
+    DeclareLaunchArgument,
+    ExecuteProcess,
+    OpaqueFunction,
+    SetEnvironmentVariable,
+    TimerAction,
+)
+from launch.substitutions import LaunchConfiguration
 
 from launch_ros.actions import Node
 
 
-def generate_launch_description():
+def launch_setup(context, *args, **kwargs):
     pkg_sensors = get_package_share_directory('bme_gazebo_sensors')
     pkg_bringup = get_package_share_directory('bme_gazebo_sensors_bringup')
 
-    rviz_arg = DeclareLaunchArgument(
-        'rviz',
-        default_value='false',
-        description='Open RViz'
-    )
+    world_name = LaunchConfiguration('world').perform(context)
+    model_name = LaunchConfiguration('model').perform(context)
+    x_value = LaunchConfiguration('x').perform(context)
+    y_value = LaunchConfiguration('y').perform(context)
+    yaw_value = LaunchConfiguration('yaw').perform(context)
+    use_sim_time = LaunchConfiguration('use_sim_time').perform(context)
 
-    rviz_config_arg = DeclareLaunchArgument(
-        'rviz_config',
-        default_value='rviz.rviz',
-        description='RViz config file name inside the bringup rviz directory'
-    )
+    world_path = os.path.join(pkg_sensors, 'worlds', world_name)
+    model_path = os.path.join(pkg_sensors, 'urdf', model_name)
+    expanded_model_path = '/tmp/mogi_bot.expanded.urdf'
 
-    world_arg = DeclareLaunchArgument(
-        'world',
-        default_value='my.sdf',
-        description='World file name inside bme_gazebo_sensors/worlds'
-    )
+    robot_description_xml = xacro.process_file(model_path).toxml()
 
-    model_arg = DeclareLaunchArgument(
-        'model',
-        default_value='mogi_bot.urdf',
-        description='URDF file name inside bme_gazebo_sensors/urdf'
-    )
-
-    x_arg = DeclareLaunchArgument(
-        'x',
-        default_value='2.5',
-        description='Spawn x'
-    )
-
-    y_arg = DeclareLaunchArgument(
-        'y',
-        default_value='1.5',
-        description='Spawn y'
-    )
-
-    yaw_arg = DeclareLaunchArgument(
-        'yaw',
-        default_value='-1.5707',
-        description='Spawn yaw'
-    )
-
-    sim_time_arg = DeclareLaunchArgument(
-        'use_sim_time',
-        default_value='true',
-        description='Use simulation time'
-    )
-
-    world_path = PathJoinSubstitution([pkg_sensors, 'worlds', LaunchConfiguration('world')])
-    model_path = PathJoinSubstitution([pkg_sensors, 'urdf', LaunchConfiguration('model')])
+    with open(expanded_model_path, 'w', encoding='utf-8') as expanded_file:
+        expanded_file.write(robot_description_xml)
 
     gz_resource_paths = os.pathsep.join([
         os.path.join(pkg_sensors, 'worlds'),
@@ -73,15 +45,15 @@ def generate_launch_description():
 
     gz_sim_server = ExecuteProcess(
         cmd=['gz', 'sim', '-v', '4', '-s', '-r', world_path],
-        output='screen'
+        output='screen',
     )
 
     gz_websocket = ExecuteProcess(
         cmd=[
             'gz', 'launch', '-v', '4',
-            os.path.join(pkg_bringup, 'config', 'gazebo_websocket.gzlaunch')
+            os.path.join(pkg_bringup, 'config', 'gazebo_websocket.gzlaunch'),
         ],
-        output='screen'
+        output='screen',
     )
 
     robot_state_publisher_node = Node(
@@ -91,14 +63,10 @@ def generate_launch_description():
         output='screen',
         parameters=[
             {
-                'use_sim_time': LaunchConfiguration('use_sim_time'),
-                'robot_description': open(
-                    os.path.join(pkg_sensors, 'urdf', 'mogi_bot.urdf'),
-                    'r',
-                    encoding='utf-8'
-                ).read()
+                'use_sim_time': use_sim_time.lower() == 'true',
+                'robot_description': robot_description_xml,
             }
-        ]
+        ],
     )
 
     spawn_robot = TimerAction(
@@ -110,32 +78,79 @@ def generate_launch_description():
                 name='spawn_mogi_bot',
                 output='screen',
                 arguments=[
-                    '-world', 'empty',
-                    '-file', model_path,
-                    '-name', 'mogi_bot',
-                    '-x', LaunchConfiguration('x'),
-                    '-y', LaunchConfiguration('y'),
+                    '--world', 'empty',
+                    '--file', expanded_model_path,
+                    '--name', 'mogi_bot',
+                    '-x', x_value,
+                    '-y', y_value,
                     '-z', '0.1',
-                    '-Y', LaunchConfiguration('yaw'),
+                    '-Y', yaw_value,
                 ],
             )
-        ]
+        ],
     )
 
-    return LaunchDescription([
-        rviz_arg,
-        rviz_config_arg,
-        world_arg,
-        model_arg,
-        x_arg,
-        y_arg,
-        yaw_arg,
-        sim_time_arg,
+    gz_bridge = ExecuteProcess(
+        cmd=[
+            'ros2', 'run', 'ros_gz_bridge', 'parameter_bridge',
+            '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
+            '/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+            '/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
+        ],
+        output='screen',
+    )
 
+    return [
         SetEnvironmentVariable('GZ_SIM_RESOURCE_PATH', gz_resource_paths),
-
         gz_sim_server,
         gz_websocket,
         robot_state_publisher_node,
+        gz_bridge,
         spawn_robot,
+    ]
+
+
+def generate_launch_description():
+    return LaunchDescription([
+        DeclareLaunchArgument(
+            'rviz',
+            default_value='false',
+            description='Open RViz',
+        ),
+        DeclareLaunchArgument(
+            'rviz_config',
+            default_value='rviz.rviz',
+            description='RViz config file name inside the bringup rviz directory',
+        ),
+        DeclareLaunchArgument(
+            'world',
+            default_value='my.sdf',
+            description='World file name inside bme_gazebo_sensors/worlds',
+        ),
+        DeclareLaunchArgument(
+            'model',
+            default_value='mogi_bot.urdf',
+            description='URDF/Xacro file name inside bme_gazebo_sensors/urdf',
+        ),
+        DeclareLaunchArgument(
+            'x',
+            default_value='2.5',
+            description='Spawn x',
+        ),
+        DeclareLaunchArgument(
+            'y',
+            default_value='1.5',
+            description='Spawn y',
+        ),
+        DeclareLaunchArgument(
+            'yaw',
+            default_value='-1.5707',
+            description='Spawn yaw',
+        ),
+        DeclareLaunchArgument(
+            'use_sim_time',
+            default_value='true',
+            description='Use simulation time',
+        ),
+        OpaqueFunction(function=launch_setup),
     ])

@@ -488,6 +488,13 @@ button:disabled {
   border: 1px solid rgba(100, 116, 139, 0.4);
 }
 
+.primary-button:disabled,
+.secondary-button:disabled,
+.preset-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 @media (max-width: 1280px) {
   .dashboard-grid {
     grid-template-columns: 1fr;
