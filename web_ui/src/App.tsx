@@ -25,9 +25,10 @@ type GoalDraft = {
 };
 
 const DEFAULT_ROSBRIDGE_URL =
-  import.meta.env.VITE_ROSBRIDGE_URL ?? "ws://localhost:9090";
+  import.meta.env.VITE_ROSBRIDGE_URL ?? "ws://127.0.0.1:9090";
+
 const DEFAULT_GAZEBO_WEB_URL =
-  import.meta.env.VITE_GAZEBO_WEB_URL ?? "";
+  import.meta.env.VITE_GAZEBO_WEB_URL ?? "http://127.0.0.1:3001/visualization";
 
 const QUICK_GOALS: Array<{
   label: string;
@@ -88,9 +89,6 @@ function App() {
 
   const [rosbridgeUrlInput, setRosbridgeUrlInput] = useState(DEFAULT_ROSBRIDGE_URL);
   const [activeRosbridgeUrl, setActiveRosbridgeUrl] = useState(DEFAULT_ROSBRIDGE_URL);
-
-  const [gazeboUrlInput, setGazeboUrlInput] = useState(DEFAULT_GAZEBO_WEB_URL);
-  const [activeGazeboUrl, setActiveGazeboUrl] = useState(DEFAULT_GAZEBO_WEB_URL);
 
   const [rosReconnectCounter, setRosReconnectCounter] = useState(0);
 
@@ -154,7 +152,6 @@ function App() {
     event.preventDefault();
 
     const nextRosbridgeUrl = rosbridgeUrlInput.trim();
-    const nextGazeboUrl = gazeboUrlInput.trim();
 
     if (nextRosbridgeUrl.length === 0) {
       appendEvent("Connection update ignored: rosbridge URL cannot be empty.");
@@ -162,13 +159,10 @@ function App() {
     }
 
     setActiveRosbridgeUrl(nextRosbridgeUrl);
-    setActiveGazeboUrl(nextGazeboUrl);
     setRosReconnectCounter((previous) => previous + 1);
 
     appendEvent(
-      `Applied connection settings. rosbridge=${nextRosbridgeUrl}${
-        nextGazeboUrl ? `, gazebo=${nextGazeboUrl}` : ", gazebo not configured"
-      }`,
+      `Applied connection settings. rosbridge=${nextRosbridgeUrl}, gazebo=${DEFAULT_GAZEBO_WEB_URL}`,
     );
   };
 
@@ -281,7 +275,7 @@ function App() {
             className="simulation-card"
           >
             <SimulationPane
-              gazeboUrl={activeGazeboUrl}
+              gazeboUrl={DEFAULT_GAZEBO_WEB_URL}
               stateLabel={status?.state ?? "idle"}
               operatorStateText={operatorStateText}
               statusStampText={formatStatusStamp(status)}
@@ -344,7 +338,7 @@ function App() {
         <section className="right-column">
           <PanelCard
             title="Connections"
-            subtitle="Browser endpoints for ROS and simulation surfaces"
+            subtitle="ROS endpoint plus fixed local Gazebo viewer"
           >
             <form onSubmit={handleApplyConnections} className="stack">
               <label className="field">
@@ -352,16 +346,15 @@ function App() {
                 <input
                   value={rosbridgeUrlInput}
                   onChange={(event) => setRosbridgeUrlInput(event.target.value)}
-                  placeholder="ws://localhost:9090"
+                  placeholder="ws://127.0.0.1:9090"
                 />
               </label>
 
               <label className="field">
                 <span>Gazebo Web URL</span>
                 <input
-                  value={gazeboUrlInput}
-                  onChange={(event) => setGazeboUrlInput(event.target.value)}
-                  placeholder="http://localhost:3001/visualization"
+                  value={DEFAULT_GAZEBO_WEB_URL}
+                  readOnly
                 />
               </label>
 

@@ -8,6 +8,13 @@
     <plugin name='gz::sim::systems::Physics' filename='gz-sim-physics-system'/>
     <plugin name='gz::sim::systems::UserCommands' filename='gz-sim-user-commands-system'/>
     <plugin name='gz::sim::systems::SceneBroadcaster' filename='gz-sim-scene-broadcaster-system'/>
+    <plugin
+      filename="gz-sim-websocket-server-system"
+      name="gz::sim::systems::WebsocketServer">
+      <port>9002</port>
+      <publication_hz>30</publication_hz>
+      <max_connections>-1</max_connections>
+    </plugin>
     <plugin name='gz::sim::systems::Contact' filename='gz-sim-contact-system'/>
     <plugin name='gz::sim::systems::Sensors' filename='gz-sim-sensors-system'>
       <render_engine>ogre2</render_engine>
