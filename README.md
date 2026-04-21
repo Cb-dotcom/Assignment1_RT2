@@ -4,7 +4,7 @@
 
 A composable ROS 2 motion stack with a browser-based operator interface.
 
-Gazebo Harmonic · ROS 2 Humble · React + TypeScript · rosbridge
+Gazebo Harmonic · ROS 2 Humble · tf2 · React + TypeScript · rosbridge
 
 ![ROS 2 Humble](https://img.shields.io/badge/ROS_2-Humble-1A75CF?logo=ros&logoColor=white)
 ![Gazebo Harmonic](https://img.shields.io/badge/Gazebo-Harmonic-F58233)
@@ -30,9 +30,10 @@ The project is built around ROS 2 composition: the same two components deploy in
 - Web operator dashboard (React + TypeScript) with manual and preset pose targets, live status, and goal history.
 - Embedded Gazebo visualization served through the `gazebosim-app` viewer.
 - rosbridge integration for browser to ROS 2 communication.
+- `tf2`-based frame handling for transforming requested goals and extracting yaw from odometry.
 - Proportional target-pose controller: simple, interpretable, and fully readable.
 
-The stack is organized in four layers: simulation (Gazebo and topic bridges), motion (the two components and the action server), browser integration (rosbridge and the Gazebo web viewer), and the operator UI.
+The stack is organized in four layers: simulation (Gazebo and topic bridges), motion (the two components, the action server, and tf2-based frame handling), browser integration (rosbridge and the Gazebo web viewer), and the operator UI.
 
 ## Requirements
 
@@ -145,7 +146,7 @@ ros2 launch bme_gazebo_sensors_bringup full_system_split.launch.py
 Hosts the `ExecuteTargetPose` action server and runs the control loop.
 
 - Validates incoming goals against configured tolerances.
-- Computes position, heading, and yaw errors from odometry.
+- Computes position and heading errors from odometry, using `tf2` for yaw extraction from quaternions.
 - Rotates in place until aligned, then drives forward proportionally.
 - Publishes `cmd_vel`, emits feedback during execution, and issues a stop on completion, preemption, or abort.
 
@@ -154,7 +155,7 @@ Hosts the `ExecuteTargetPose` action server and runs the control loop.
 Connects the browser to the action server.
 
 - Subscribes to pose targets submitted through rosbridge.
-- Validates and transforms them before forwarding.
+- Validates and uses `tf2` to transform requested poses from `map` into the execution frame `odom` before forwarding.
 - Acts as an action client to `MotionExecutorComponent`.
 - Publishes `MotionUiStatus` for the UI to consume.
 
@@ -199,7 +200,7 @@ Talks to ROS 2 through `rosbridge_server` on `ws://127.0.0.1:9090`.
 
 ## Documentation
 
-Extended documentation is planned with:
+Extended documentation will be provided through:
 
 - Sphinx for architecture, controller design, launch strategies, and composition comparison.
 - Doxygen for code-level API reference.
