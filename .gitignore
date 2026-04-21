@@ -23,5 +23,5 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
-#Temporary files
-tools/
+# #Temporary files
+# tools/

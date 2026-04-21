@@ -1,0 +1,3 @@
+[submodule "tools/gazebosim-app"]
+	path = tools/gazebosim-app
+	url = https://github.com/gazebo-web/gazebosim-app.git
