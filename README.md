@@ -4,7 +4,7 @@
 
 A composable ROS 2 motion stack with a browser-based operator interface.
 
-Gazebo Harmonic · ROS 2 Humble · tf2 · React + TypeScript · rosbridge
+Gazebo Harmonic · ROS 2 Humble · React + TypeScript · rosbridge
 
 ![ROS 2 Humble](https://img.shields.io/badge/ROS_2-Humble-1A75CF?logo=ros&logoColor=white)
 ![Gazebo Harmonic](https://img.shields.io/badge/Gazebo-Harmonic-F58233)
@@ -176,7 +176,6 @@ React + TypeScript, bundled with Vite. Features:
 - Preset goal buttons
 - Live execution state
 - Goal history
-- Focus mode for the embedded simulation pane
 
 Talks to ROS 2 through `rosbridge_server` on `ws://127.0.0.1:9090`.
 
@@ -191,12 +190,6 @@ Talks to ROS 2 through `rosbridge_server` on `ws://127.0.0.1:9090`.
 └── tools/
     └── gazebosim-app/               # Gazebo web viewer (submodule)
 ```
-
-## Notes
-
-- The stack runs on simulation time. Confirm `/clock` is bridged if you plug in external nodes.
-- The embedded viewer depends on the `gazebosim-app` submodule and its Docker image being available.
-- The motion stack assumes valid `odom` and `cmd_vel` bridges between Gazebo and ROS 2.
 
 ## Documentation
 
