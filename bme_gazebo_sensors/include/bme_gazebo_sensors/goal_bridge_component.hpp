@@ -12,6 +12,7 @@
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
+#include "std_msgs/msg/empty.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
 
@@ -30,6 +31,7 @@ private:
   void declare_and_get_parameters();
 
   void target_pose_callback(const geometry_msgs::msg::PoseStamped::SharedPtr msg);
+  void cancel_request_callback(const std_msgs::msg::Empty::SharedPtr msg);
 
   bool validate_request(
     const geometry_msgs::msg::PoseStamped & pose,
@@ -54,6 +56,7 @@ private:
 
   rclcpp_action::Client<ExecuteTargetPose>::SharedPtr action_client_;
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr target_pose_subscription_;
+  rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr cancel_request_subscription_;
   rclcpp::Publisher<bme_gazebo_sensors_interfaces::msg::MotionUiStatus>::SharedPtr status_publisher_;
 
   std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
@@ -64,9 +67,11 @@ private:
   bool have_cached_goals_{false};
   geometry_msgs::msg::PoseStamped last_requested_goal_;
   geometry_msgs::msg::PoseStamped last_execution_goal_;
+  GoalHandleExecuteTargetPose::SharedPtr active_goal_handle_;
 
   std::string action_name_;
   std::string request_topic_;
+  std::string cancel_topic_;
   std::string status_topic_;
   std::string input_goal_frame_;
   std::string execution_frame_;

@@ -171,7 +171,7 @@ function App() {
     values: { x: number; y: number; yaw: number },
     source: "manual" | "preset",
     label: string,
-    ) => {
+  ) => {
     const goal = buildPoseStamped(values.x, values.y, values.yaw);
     const published = clientRef.current?.publishGoal(goal) ?? false;
 
@@ -201,15 +201,26 @@ function App() {
   };
 
   const handleManualGoalClick = () => {
-  appendEvent("Manual send button clicked.");
+    appendEvent("Manual send button clicked.");
 
-  const parsed = parseGoalDraft(goalDraft);
+    const parsed = parseGoalDraft(goalDraft);
     if (!parsed) {
       appendEvent("Manual goal rejected locally: x, y, and yaw must be valid numbers.");
       return;
     }
 
-    submitGoal(parsed, "manual", "manual"); 
+    submitGoal(parsed, "manual", "manual");
+  };
+
+  const handleCancelGoalClick = () => {
+    const published = clientRef.current?.publishCancelRequest() ?? false;
+
+    if (!published) {
+      appendEvent("Failed to publish cancel request: rosbridge is not ready.");
+      return;
+    }
+
+    appendEvent("Published cancel request for the active goal.");
   };
 
   const handlePresetClick = (preset: (typeof QUICK_GOALS)[number]) => {
@@ -279,14 +290,14 @@ function App() {
             subtitle="Embedded browser surface for Gazebo web visualization"
             className="simulation-card"
           >
-          <SimulationPane
-            gazeboUrl={DEFAULT_GAZEBO_WEB_URL}
-            stateLabel={status?.state ?? "idle"}
-            operatorStateText={operatorStateText}
-            statusStampText={formatStatusStamp(status)}
-            focused={simulationFocused}
-            onToggleFocus={() => setSimulationFocused((previous) => !previous)}
-          />
+            <SimulationPane
+              gazeboUrl={DEFAULT_GAZEBO_WEB_URL}
+              stateLabel={status?.state ?? "idle"}
+              operatorStateText={operatorStateText}
+              statusStampText={formatStatusStamp(status)}
+              focused={simulationFocused}
+              onToggleFocus={() => setSimulationFocused((previous) => !previous)}
+            />
           </PanelCard>
 
           <PanelCard
@@ -437,6 +448,15 @@ function App() {
                 onClick={handleManualGoalClick}
               >
                 {status?.goal_active ? "Goal in progress" : "Send Goal"}
+              </button>
+
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={connectionState !== "connected" || !(status?.goal_active ?? false)}
+                onClick={handleCancelGoalClick}
+              >
+                Cancel Goal
               </button>
             </form>
           </PanelCard>

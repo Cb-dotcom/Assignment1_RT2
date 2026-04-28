@@ -26,6 +26,11 @@ GoalBridgeComponent::GoalBridgeComponent(const rclcpp::NodeOptions & options)
     rclcpp::SystemDefaultsQoS(),
     std::bind(&GoalBridgeComponent::target_pose_callback, this, std::placeholders::_1));
 
+  cancel_request_subscription_ = this->create_subscription<std_msgs::msg::Empty>(
+    cancel_topic_,
+    rclcpp::SystemDefaultsQoS(),
+    std::bind(&GoalBridgeComponent::cancel_request_callback, this, std::placeholders::_1));
+
   status_publisher_ =
     this->create_publisher<bme_gazebo_sensors_interfaces::msg::MotionUiStatus>(
       status_topic_,
@@ -33,8 +38,9 @@ GoalBridgeComponent::GoalBridgeComponent(const rclcpp::NodeOptions & options)
 
   RCLCPP_INFO(
     get_logger(),
-    "Goal bridge ready. Subscribing to '%s', publishing status on '%s', expecting user goals in '%s', transforming to '%s', and forwarding to action '%s'.",
+    "Goal bridge ready. Subscribing to '%s', cancel topic '%s', publishing status on '%s', expecting user goals in '%s', transforming to '%s', and forwarding to action '%s'.",
     request_topic_.c_str(),
+    cancel_topic_.c_str(),
     status_topic_.c_str(),
     input_goal_frame_.c_str(),
     execution_frame_.c_str(),
@@ -52,6 +58,7 @@ void GoalBridgeComponent::declare_and_get_parameters()
 {
   action_name_ = this->declare_parameter<std::string>("action_name", "execute_target_pose");
   request_topic_ = this->declare_parameter<std::string>("request_topic", "/target_pose_requests");
+  cancel_topic_ = this->declare_parameter<std::string>("cancel_topic", "/cancel_target_requests");
   status_topic_ = this->declare_parameter<std::string>("status_topic", "/motion_ui_status");
   input_goal_frame_ = this->declare_parameter<std::string>("input_goal_frame", "map");
   execution_frame_ = this->declare_parameter<std::string>("execution_frame", "odom");
@@ -63,6 +70,9 @@ void GoalBridgeComponent::declare_and_get_parameters()
   }
   if (request_topic_.empty()) {
     throw std::invalid_argument("request_topic cannot be empty.");
+  }
+  if (cancel_topic_.empty()) {
+    throw std::invalid_argument("cancel_topic cannot be empty.");
   }
   if (status_topic_.empty()) {
     throw std::invalid_argument("status_topic cannot be empty.");
@@ -146,6 +156,7 @@ void GoalBridgeComponent::target_pose_callback(
     have_cached_goals_ = true;
     last_requested_goal_ = *msg;
     last_execution_goal_ = transformed_goal;
+    active_goal_handle_.reset();
   }
 
   RCLCPP_INFO(
@@ -176,6 +187,7 @@ void GoalBridgeComponent::target_pose_callback(
         {
           std::scoped_lock<std::mutex> lock(goal_mutex_);
           goal_active_ = false;
+          active_goal_handle_.reset();
         }
 
         publish_status(
@@ -187,6 +199,11 @@ void GoalBridgeComponent::target_pose_callback(
 
         RCLCPP_WARN(get_logger(), "Action server rejected the submitted goal.");
         return;
+      }
+
+      {
+        std::scoped_lock<std::mutex> lock(goal_mutex_);
+        active_goal_handle_ = goal_handle;
       }
 
       publish_status(
@@ -228,6 +245,7 @@ void GoalBridgeComponent::target_pose_callback(
       {
         std::scoped_lock<std::mutex> lock(goal_mutex_);
         goal_active_ = false;
+        active_goal_handle_.reset();
       }
 
       const auto & final_pose = result.result->final_pose.pose.position;
@@ -300,6 +318,41 @@ void GoalBridgeComponent::target_pose_callback(
     };
 
   action_client_->async_send_goal(goal, options);
+}
+
+void GoalBridgeComponent::cancel_request_callback(
+  const std_msgs::msg::Empty::SharedPtr msg)
+{
+  (void)msg;
+
+  GoalHandleExecuteTargetPose::SharedPtr goal_handle_to_cancel;
+
+  {
+    std::scoped_lock<std::mutex> lock(goal_mutex_);
+    if (!goal_active_ || !active_goal_handle_) {
+      RCLCPP_WARN(get_logger(), "Ignoring cancel request because no goal is active.");
+      publish_status(
+        "cancel_ignored",
+        "No active goal to cancel.",
+        make_default_pose(execution_frame_),
+        0.0,
+        false);
+      return;
+    }
+
+    goal_handle_to_cancel = active_goal_handle_;
+  }
+
+  RCLCPP_INFO(get_logger(), "Forwarding cancel request for the active goal.");
+
+  publish_status(
+    "cancel_requested",
+    "Cancel request forwarded to action server.",
+    make_default_pose(execution_frame_),
+    0.0,
+    true);
+
+  action_client_->async_cancel_goal(goal_handle_to_cancel);
 }
 
 bool GoalBridgeComponent::validate_request(

@@ -10,6 +10,8 @@ interface RosDashboardCallbacks {
 
 const GOAL_TOPIC_NAME = "/target_pose_requests";
 const GOAL_TOPIC_TYPE = "geometry_msgs/msg/PoseStamped";
+const CANCEL_TOPIC_NAME = "/cancel_target_requests";
+const CANCEL_TOPIC_TYPE = "std_msgs/msg/Empty";
 
 export class RosDashboardClient {
   private readonly url: string;
@@ -36,6 +38,7 @@ export class RosDashboardClient {
     this.ros.on("connection", () => {
       this.connected = true;
       this.advertiseGoalPublisher();
+      this.advertiseCancelPublisher();
 
       this.callbacks.onConnectionStateChange?.(
         "connected",
@@ -68,6 +71,15 @@ export class RosDashboardClient {
     });
   }
 
+  private advertiseCancelPublisher(): void {
+    (this.ros as any).callOnConnection({
+      op: "advertise",
+      topic: CANCEL_TOPIC_NAME,
+      type: CANCEL_TOPIC_TYPE,
+      queue_size: 1,
+    });
+  }
+
   connect(): void {
     this.callbacks.onConnectionStateChange?.(
       "connecting",
@@ -96,13 +108,29 @@ export class RosDashboardClient {
 
     this.advertiseGoalPublisher();
 
-    console.log("Publishing goal through rosbridge:", goal);
-
     (this.ros as any).callOnConnection({
       op: "publish",
       topic: GOAL_TOPIC_NAME,
       type: GOAL_TOPIC_TYPE,
       msg: goal,
+    });
+
+    return true;
+  }
+
+  publishCancelRequest(): boolean {
+    if (!this.connected) {
+      console.warn("ROS cancel publish skipped: rosbridge is not connected.");
+      return false;
+    }
+
+    this.advertiseCancelPublisher();
+
+    (this.ros as any).callOnConnection({
+      op: "publish",
+      topic: CANCEL_TOPIC_NAME,
+      type: CANCEL_TOPIC_TYPE,
+      msg: {},
     });
 
     return true;
@@ -118,6 +146,11 @@ export class RosDashboardClient {
       (this.ros as any).callOnConnection({
         op: "unadvertise",
         topic: GOAL_TOPIC_NAME,
+      });
+
+      (this.ros as any).callOnConnection({
+        op: "unadvertise",
+        topic: CANCEL_TOPIC_NAME,
       });
     }
 
