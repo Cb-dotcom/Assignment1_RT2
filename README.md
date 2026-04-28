@@ -136,7 +136,7 @@ Each component runs in its own container:
 Cleaner failure isolation, easier per-component debugging, and a demonstration of deployment flexibility. Component source and behavior are identical across the two modes.
 
 ```bash
-ros2 launch bme_gazebo_sensors_bringup full_system_split.launch.py
+ros2 launch bme_gazebo_sensors_bringup full_system.launch.py rviz:=true
 ```
 
 ## Components
@@ -183,8 +183,8 @@ Talks to ROS 2 through `rosbridge_server` on `ws://127.0.0.1:9090`.
 
 ```text
 .
-├── bme_gazebo_sensors/              # robot description, worlds, meshes
-├── bme_gazebo_sensors_bringup/      # launch files, configs, RViz
+├── bme_gazebo_sensors/              # robot description, worlds, meshes, RViz config
+├── bme_gazebo_sensors_bringup/      # launch files and configs
 ├── bme_gazebo_sensors_interfaces/   # actions and messages
 ├── web_ui/                          # React + TS operator dashboard
 └── tools/
