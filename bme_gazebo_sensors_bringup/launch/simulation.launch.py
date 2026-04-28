@@ -14,6 +14,7 @@ from launch.actions import (
 from launch.substitutions import LaunchConfiguration
 
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def launch_setup(context, *args, **kwargs):
@@ -46,6 +47,8 @@ def launch_setup(context, *args, **kwargs):
     gz_sim_server = ExecuteProcess(
         cmd=['gz', 'sim', '-v', '4', '-s', '-r', world_path],
         output='screen',
+        sigterm_timeout='2',
+        sigkill_timeout='3',
     )
 
     gz_websocket = ExecuteProcess(
@@ -54,6 +57,8 @@ def launch_setup(context, *args, **kwargs):
             os.path.join(pkg_bringup, 'config', 'gazebo_websocket.gzlaunch'),
         ],
         output='screen',
+        sigterm_timeout='2',
+        sigkill_timeout='3',
     )
 
     robot_state_publisher_node = Node(
@@ -61,12 +66,10 @@ def launch_setup(context, *args, **kwargs):
         executable='robot_state_publisher',
         name='robot_state_publisher',
         output='screen',
-        parameters=[
-            {
-                'use_sim_time': use_sim_time.lower() == 'true',
-                'robot_description': robot_description_xml,
-            }
-        ],
+        parameters=[{
+            'use_sim_time': use_sim_time.lower() == 'true',
+            'robot_description': ParameterValue(robot_description_xml, value_type=str),
+        }],
     )
 
     spawn_robot = TimerAction(
@@ -96,8 +99,13 @@ def launch_setup(context, *args, **kwargs):
             '/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock',
             '/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
             '/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
+            '/tf@tf2_msgs/msg/TFMessage[gz.msgs.Pose_V',
+            '/joint_states@sensor_msgs/msg/JointState[gz.msgs.Model',
+            '/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
         ],
         output='screen',
+        sigterm_timeout='2',
+        sigkill_timeout='3',
     )
 
     return [
